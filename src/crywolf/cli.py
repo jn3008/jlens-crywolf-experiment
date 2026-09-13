@@ -53,15 +53,32 @@ def write_json(path, obj):
     path.write_text(json.dumps(obj, indent=2, ensure_ascii=False) + "\n")
 
 
+def run(args, rows, config):
+    from crywolf.collect import collect_run
+    collect_run(args, rows, config)
+
+
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["validate"])
+    parser.add_argument("command", choices=['validate', 'run'])
     parser.add_argument("--prompts", default="data/pilot.jsonl")
+    parser.add_argument("--config", default="configs/local-qwen3-1.7b.json")
+    parser.add_argument("--output", help="New output path; run defaults to outputs/collection")
+    parser.add_argument("--limit", type=int, help="Collect only the first N prompts")
+    parser.add_argument("--device", choices=["cuda", "cpu"], default="cuda")
     args = parser.parse_args()
+    if args.limit is not None and args.limit < 1:
+        parser.error("--limit must be positive")
     rows = read_prompts(args.prompts)
-    print(json.dumps({"prompts": len(rows), "conditions": dict(Counter(r["condition"] for r in rows))}, indent=2))
+    if args.limit is not None:
+        rows = rows[:args.limit]
+    if args.command == "validate":
+        print(json.dumps({"prompts": len(rows), "conditions": dict(Counter(r["condition"] for r in rows))}, indent=2))
+    else:
+        args.output = args.output or "outputs/collection"
+        run(args, rows, json.loads(Path(args.config).read_text()))
 
 
 if __name__ == "__main__":

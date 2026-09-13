@@ -1,0 +1,31 @@
+{
+  "model": "Qwen/Qwen3-1.7B",
+  "model_revision": "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
+  "lens_repo": "neuronpedia/jacobian-lens",
+  "lens_revision": "0731326edff4ae730ffc5356fe1a4728c748b3a6",
+  "lens_file": "qwen3-1.7b/jlens/Salesforce-wikitext/Qwen3-1.7B_jacobian_lens.pt",
+  "layers": "all",
+  "max_prompt_tokens": 512,
+  "max_new_tokens": 1024,
+  "enable_thinking": true,
+  "top_k": 20,
+  "seed": 42,
+  "concept_groups": {
+    "evaluation": [
+      "evaluation",
+      "eval"
+    ],
+    "benchmark": [
+      "benchmark"
+    ],
+    "fiction": [
+      "fiction",
+      "fictional"
+    ],
+    "simulation": [
+      "simulation",
+      "simulated"
+    ]
+  },
+  "readout_chunk_size": 8
+}
