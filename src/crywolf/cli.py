@@ -62,13 +62,32 @@ def run(args, rows, config):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=['validate', 'run'])
+    parser.add_argument("command", choices=['validate', 'run', 'inspect', 'view'])
+    parser.add_argument("--run-dir", help="Saved schema-2 collection directory")
+    parser.add_argument("--example", default="0000", help="Example directory number, e.g. 0000")
+    parser.add_argument("--position", type=int, help="Absolute token position to inspect; defaults to last prompt token")
+    parser.add_argument("--html", help="New HTML output file or directory for view")
     parser.add_argument("--prompts", default="data/pilot.jsonl")
     parser.add_argument("--config", default="configs/local-qwen3-1.7b.json")
     parser.add_argument("--output", help="New output path; run defaults to outputs/collection")
     parser.add_argument("--limit", type=int, help="Collect only the first N prompts")
     parser.add_argument("--device", choices=["cuda", "cpu"], default="cuda")
     args = parser.parse_args()
+    if args.command in {"inspect", "view"}:
+        from crywolf.inspect import load_example, print_inspection, write_directory_view
+        if not args.run_dir:
+            parser.error("--run-dir is required for inspect/view")
+        try:
+            if args.command == "inspect":
+                print_inspection(load_example(args.run_dir, args.example), args.position)
+            else:
+                target = Path(args.html) if args.html else Path(args.run_dir) / "viewer"
+                write_directory_view(args.run_dir, target, initial_example=args.example)
+                print("Serve this directory with: python -m http.server --directory "
+                      f"{target.resolve()} 8000")
+        except (ValueError, OSError) as exc:
+            parser.exit(1, f"{exc}\n")
+        return
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be positive")
     rows = read_prompts(args.prompts)

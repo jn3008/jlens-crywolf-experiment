@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crywolf readout inspection</title>
+<style>
+  body {
+    font: 15px system-ui, sans-serif;
+    margin: 24px;
+    color: #172333;
+    background: #f7f9fc
+  }
+
+  h1 {
+    font-size: 24px
+  }
+
+  h2 {
+    font-size: 18px
+  }
+
+  label {
+    display: inline-block;
+    margin: 8px 20px 8px 0
+  }
+
+  button,
+  select,
+  input {
+    font: inherit;
+    padding: 4px
+  }
+
+  section {
+    background: white;
+    padding: 16px;
+    margin: 16px 0;
+    border: 1px solid #d8e1ec;
+    border-radius: 6px
+  }
+
+  .scroll {
+    overflow: auto;
+    min-width: 0;
+    position: relative
+  }
+
+  canvas {
+    display: block;
+    cursor: crosshair
+  }
+
+  pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 13px
+  }
+
+  td,
+  th {
+    padding: 5px 10px;
+    text-align: left;
+    border-bottom: 1px solid #e3e8ef
+  }
+
+  .muted {
+    color: #536477
+  }
+
+  #status {
+    font-weight: 600
+  }
+
+  select {
+    max-width: 100%
+  }
+
+  @media(max-width:600px) {
+    body {
+      margin: 12px
+    }
+
+    section {
+      padding: 10px
+    }
+
+    .grid {
+      display: block
+    }
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px
+  }
+
+  summary {
+    cursor: pointer
+  }
+
+  .legend {
+    height: 12px;
+    width: 240px;
+    background: linear-gradient(to right, #f7fbff, #16609f);
+    margin: 8px 0
+  }
+
+  #error {
+    color: #a00
+  }
+
+  .dashboard {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    gap: 20px;
+    align-items: start
+  }
+
+  .dashboard>div {
+    min-width: 0
+  }
+
+  .dashboard h1 {
+    margin-top: 0
+  }
+
+  .dashboard section {
+    margin-top: 0
+  }
+
+  #selectedPanel {
+    max-height: 490px;
+    overflow: auto;
+    margin-top: 0
+  }
+
+  #selectedPanel h2 {
+    margin-top: 0
+  }
+
+  #selectedPanel .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px
+  }
+
+  #selectedPanel .table-scroll {
+    max-height: 235px;
+    overflow: auto
+  }
+
+  #selectedPanel td {
+    overflow-wrap: anywhere;
+    padding: 4px
+  }
+
+  #selectedPanel th {
+    padding: 4px
+  }
+
+  #selection {
+    min-height: 90px;
+    font-size: 13px
+  }
+
+  .cell-outline {
+    position: absolute;
+    box-sizing: border-box;
+    border: 2px solid #10283e;
+    box-shadow: inset 0 0 0 1px white;
+    pointer-events: none;
+    z-index: 1
+  }
+
+  @media(max-width:900px) {
+    .dashboard {
+      grid-template-columns: minmax(0, 1fr)
+    }
+
+    #selectedPanel {
+      max-height: 490px
+    }
+  }
+</style>
+<div class="dashboard">
+  <div>
+    <h1>J-Lens readout inspection</h1>
+    <p id="status"></p>
+    <p class="muted">Exploratory measurements, not awareness probabilities. Each cell is the state <b>after
+        consuming</b> the token. Prompt and continuation are separated by an orange line; special tokens are included.
+    </p>
+    <section><label>Example <select id="example"></select></label><span id="loading" role="status"
+        aria-live="polite"></span></section>
+    <section id="controls"><label>Concept group <select id="group"></select></label><label>Region <select id="region">
+          <option value="all">Whole sequence</option>
+          <option value="prompt">Prompt</option>
+          <option value="continuation">Continuation</option>
+        </select></label><br><label>Cell width <input id="cellWidth" type="range" min="12" max="80" step="1"
+          value="26"><output id="cellWidthValue">26 px</output></label><br><button id="prev">Previous</button>
+      <label>Start position <input id="start" type="number" min="0" value="0" style="width:90px"></label><button
+        id="next">Next</button>
+      <p id="window"></p>
+    </section>
+  </div>
+  <section id="selectedPanel">
+    <h2>Selected cell</h2>
+    <p>Hover to preview; click to pin a cell. Use “Unpin” to resume hover updates.</p><button id="unpin">Unpin</button>
+    <pre id="selection"></pre>
+    <div class="grid">
+      <div>
+        <h3>Every group member</h3>
+        <div class="table-scroll">
+          <table id="members"></table>
+        </div>
+      </div>
+      <div>
+        <h3>Top vocabulary tokens</h3>
+        <div class="table-scroll">
+          <table id="top"></table>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<div id="error" role="alert"></div>
+<div id="content" hidden>
+  <section>
+    <details id="rawLogits">
+      <summary>Raw group logit — click to expand/collapse</summary>
+      <div class="legend"></div>
+      <p id="logitLegend" class="muted"></p>
+      <div class="scroll"><canvas id="logit"></canvas></div>
+    </details>
+  </section>
+  <section>
+    <h2>Full-vocabulary rank</h2>
+    <div class="legend"></div>
+    <p id="rankLegend" class="muted"></p>
+    <div class="scroll"><canvas id="rank"></canvas></div>
+  </section>
+  <section>
+    <details>
+      <summary>Exact prompt and response</summary>
+      <h3>Formatted prompt</h3>
+      <pre id="prompt"></pre>
+      <h3>Response (special markers retained)</h3>
+      <pre id="response"></pre>
+    </details>
+    <details>
+      <summary>Provenance and measurement settings</summary>
+      <pre id="provenance"></pre>
+    </details>
+  </section>
+</div>
+<script id="data" type="application/json">__DATA__</script>
+<script>
+  'use strict';
+  const bundle = JSON.parse(document.getElementById('data').textContent), $ = id => document.getElementById(id);
+  const rowHeight = 18, left = 45, right = 12;
+  let columnWidth = 26;
+  let visibleCount = 1;
+  let D, T, boundary, start = 0, end = 0, pinned = false, selectedLayer = 0, selectedPos = 0, loadSequence = 0;
+  const entries = bundle.examples || [{ key: 'single', id: bundle.transcript.id, status: 'complete' }];
+  for (const entry of entries) { const option = document.createElement('option'); option.value = entry.key; option.textContent = `${entry.key} · ${entry.id}${entry.condition ? ' · ' + entry.condition : ''}${entry.status !== 'complete' ? ' (' + entry.status + ')' : ''}`; option.disabled = entry.status !== 'complete'; $('example').append(option); }
+  async function loadExample(key) {
+    const request = ++loadSequence; $('loading').textContent = 'Loading example…'; $('content').hidden = true; $('selectedPanel').hidden = true; $('controls').hidden = true; $('error').textContent = '';
+    try {
+      const entry = entries.find(e => e.key === key); if (!entry || entry.status !== 'complete') throw new Error('This example is incomplete.');
+      let data;
+      if (entry.url) {
+        const response = await fetch(entry.url); if (!response.ok) throw new Error(`Could not load ${entry.url} (HTTP ${response.status}).`);
+        data = await response.json();
+        if (data.readouts_url) {
+          if (typeof DecompressionStream === 'undefined') throw new Error('This viewer needs a browser with gzip DecompressionStream support (current Chrome or Firefox).');
+          const base = new URL(entry.url, location.href), raw = await fetch(new URL(data.readouts_url, base));
+          if (!raw.ok) throw new Error(`Could not load ${data.readouts_url} (HTTP ${raw.status}).`);
+          const text = await new Response(raw.body.pipeThrough(new DecompressionStream('gzip'))).text();
+          const byLayer = Object.fromEntries(data.layers.map(layer => [layer, []]));
+          for (const line of text.split('\n')) if (line.trim()) { const cell = JSON.parse(line); (byLayer[cell.layer] ??= [])[cell.position] = cell; }
+          data.cells = data.layers.map(layer => byLayer[layer]);
+          const vocab = await fetch(new URL(data.vocabulary_url, base)); if (!vocab.ok) throw new Error('Could not load vocabulary.json.');
+          data.vocabulary = await vocab.json();
+        }
+      } else { throw new Error('viewer assets are missing'); }
+      if (request !== loadSequence) return;
+      D = data; T = D.transcript.tokens; boundary = D.transcript.prompt_length;
+      const previousGroup = $('group').value; $('group').replaceChildren();
+      for (const name of Object.keys(D.groups)) { const o = document.createElement('option'); o.value = name; o.textContent = name; $('group').append(o); }
+      if (Object.hasOwn(D.groups, previousGroup)) $('group').value = previousGroup;
+      pinned = false; selectedLayer = 0; selectedPos = Math.max(0, boundary - 1); $('start').value = bounds()[0];
+      $('status').textContent = `${D.transcript.id} · ${D.manifest.config.model} · ${T.length} tokens × ${D.layers.length} fitted layers · stop: ${D.transcript.stop_reason} · run: ${D.manifest.status}`;
+      $('prompt').textContent = D.transcript.rendered_prompt; $('response').textContent = D.transcript.response;
+      $('provenance').textContent = JSON.stringify({ run: D.run_dir, config: D.manifest.config, measurement: D.manifest.measurement, source_hashes: D.manifest.source_sha256, versions: D.manifest.versions }, null, 2);
+      $('content').hidden = false; $('selectedPanel').hidden = false; $('controls').hidden = false; render(); $('loading').textContent = '';
+      window.dispatchEvent(new CustomEvent('crywolf-example-loaded', { detail: { key } }));
+    } catch (error) { if (request === loadSequence) { $('loading').textContent = ''; $('status').textContent = 'Example unavailable'; $('error').textContent = error.message; } }
+  }
+  function bounds() { return $('region').value === 'prompt' ? [0, boundary] : $('region').value === 'continuation' ? [boundary, T.length] : [0, T.length]; }
+  function table(id, headers, rows) { const root = $(id); root.replaceChildren(); const tr = document.createElement('tr'); for (const h of headers) { const th = document.createElement('th'); th.textContent = h; tr.append(th); } root.append(tr); for (const row of rows) { const tr = document.createElement('tr'); for (const v of row) { const td = document.createElement('td'); td.textContent = v; tr.append(td); } root.append(tr); } }
+  function word(id) { const value = D.vocabulary[String(id)]; return value == null ? '[no tokenizer text]' : JSON.stringify(value); }
+  function selectCell(li, p) {
+    selectedLayer = li; selectedPos = p; const c = D.cells[li][p], g = c.groups[$('group').value]; $('selection').textContent = `Layer ${D.layers[li]} · absolute position ${p} · ${T[p].region}\nConsumed token: ${JSON.stringify(T[p].text)} (ID ${T[p].token_id})\nGroup: ${$('group').value} · logit ${g.logit.toFixed(5)} · vocabulary rank ${g.rank}\nWinner: ${word(g.winner_token_id)} (ID ${g.winner_token_id})`;
+    table('members', ['Token', 'ID', 'Logit', 'Rank'], D.groups[$('group').value].map(id => [word(id), id, c.members[id].logit.toFixed(5), c.members[id].rank])); table('top', ['Token', 'ID', 'Logit'], c.top_tokens.map(v => [word(v.token_id), v.token_id, v.logit.toFixed(5)]));
+  }
+  function tokenLabel(position) { return JSON.stringify(T[position].text); }
+  function render() {
+    if (!D || $('content').hidden) return;
+    const [lo, hi] = bounds(); if (hi <= lo) { $('error').textContent = 'No tokens in this region'; return; } $('error').textContent = '';
+    columnWidth = Number($('cellWidth').value) || 26; $('cellWidthValue').textContent = `${columnWidth} px`;
+    const width = Math.max(left + columnWidth + right, Math.floor($('rank').parentElement.clientWidth));
+    visibleCount = Math.max(1, Math.floor((width - left - right) / columnWidth));
+    start = Math.max(lo, Math.min(hi - 1, Math.floor(Number($('start').value) || 0))); end = Math.min(hi, start + visibleCount);
+    $('start').value = start; $('start').min = lo; $('start').max = hi - 1;
+    $('prev').disabled = start === lo; $('next').disabled = end === hi;
+    $('window').textContent = `Positions ${start}–${end - 1} of ${T.length} · ${end - start} tokens shown (fits available width) · continuation begins at ${boundary}. Rank colors share a vocabulary-based scale across examples.`;
+    const measuring = $('rank').getContext('2d'); measuring.font = '12px system-ui';
+    const labelLimit = 180; let labelHeight = 0; const labels = [];
+    for (let p = start; p < end; p++) {
+      let label = tokenLabel(p);
+      if (measuring.measureText(label).width > labelLimit) {
+        while (label.length && measuring.measureText(label + '…').width > labelLimit) label = label.slice(0, -1);
+        label += '…';
+      }
+      labels.push(label); labelHeight = Math.max(labelHeight, measuring.measureText(label).width);
+    }
+    const plotTop = Math.ceil(labelHeight) + 40;
+    const group = $('group').value; let min = Infinity, max = -Infinity, maxRank = D.manifest.output_vocab_size || Math.max(1, ...Object.keys(D.vocabulary).map(Number)) + 1; for (const row of D.cells) for (const c of row) { const v = c.groups[group]; min = Math.min(min, v.logit); max = Math.max(max, v.logit); maxRank = Math.max(maxRank, v.rank); }
+    $('logitLegend').textContent = `Light: ${min.toFixed(3)} → dark: ${max.toFixed(3)}. Linear raw-logit scale; not normalized across examples/groups.`;
+    $('rankLegend').textContent = `Light: rank ${maxRank.toLocaleString()} → dark: rank 1. Logarithmic color spacing (log10 rank); exact ranks are shown on selection. Lower rank means more prominent.`;
+    for (const metric of ['logit', 'rank']) {
+      const canvas = $(metric), height = plotTop + D.layers.length * rowHeight + 28, dpr = window.devicePixelRatio || 1;
+      canvas.style.width = width + 'px'; canvas.style.height = height + 'px'; canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
+      canvas.dataset.plotTop = plotTop; canvas.dataset.start = start; canvas.dataset.end = end; canvas.dataset.columnWidth = columnWidth;
+      const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = 'white'; ctx.fillRect(0, 0, width, height); ctx.font = '11px system-ui';
+      for (let li = 0; li < D.layers.length; li++) {
+        ctx.fillStyle = '#172333'; ctx.fillText(`L${D.layers[li]}`, 5, plotTop + li * rowHeight + 13);
+        for (let p = start; p < end; p++) {
+          const v = D.cells[li][p].groups[group];
+          const strength = metric === 'logit' ? (max === min ? 0.5 : (v.logit - min) / (max - min)) : (maxRank === 1 ? 1 : 1 - Math.log10(v.rank) / Math.log10(maxRank));
+          ctx.fillStyle = `rgb(${Math.round(247 - 225 * strength)},${Math.round(251 - 155 * strength)},${Math.round(255 - 96 * strength)})`;
+          ctx.fillRect(left + (p - start) * columnWidth, plotTop + li * rowHeight, columnWidth, rowHeight);
+        }
+      }
+      for (let p = start; p < end; p++) {
+        const x = left + (p - start + 0.5) * columnWidth;
+        ctx.save(); ctx.translate(x, plotTop - 24); ctx.rotate(-Math.PI / 2); ctx.font = '12px system-ui';
+        ctx.textBaseline = 'middle'; ctx.fillStyle = T[p].region === 'prompt' ? '#172333' : '#315e8c'; ctx.fillText(labels[p - start], 0, 0); ctx.restore();
+        ctx.fillStyle = '#536477'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; ctx.fillText(p, x, plotTop - 7); ctx.textAlign = 'left';
+      }
+      if (boundary >= start && boundary < end) { ctx.strokeStyle = '#ef7900'; ctx.lineWidth = 2; const x = left + (boundary - start) * columnWidth; ctx.beginPath(); ctx.moveTo(x, plotTop); ctx.lineTo(x, height - 25); ctx.stroke(); }
+      ctx.fillStyle = '#172333'; ctx.fillText('Absolute token position →', left, height - 6);
+      let outline = canvas.parentElement.querySelector('.cell-outline');
+      if (!outline) { outline = document.createElement('div'); outline.className = 'cell-outline'; outline.setAttribute('aria-hidden', 'true'); canvas.parentElement.append(outline); }
+      outline.hidden = true;
+      const hit = event => {
+        const r = canvas.getBoundingClientRect(), x = (event.clientX - r.left) * width / r.width, y = (event.clientY - r.top) * height / r.height;
+        const p = start + Math.floor((x - left) / columnWidth), li = y < plotTop ? selectedLayer : Math.floor((y - plotTop) / rowHeight);
+        if (li >= 0 && li < D.layers.length && p >= start && p < end && y >= 0) {
+          canvas.title = `Position ${p} · ${T[p].region} · ${tokenLabel(p)}`;
+          outline.style.left = (left + (p - start) * columnWidth) + 'px'; outline.style.top = (plotTop + li * rowHeight) + 'px';
+          outline.style.width = columnWidth + 'px'; outline.style.height = rowHeight + 'px'; outline.dataset.position = p; outline.dataset.layer = D.layers[li]; outline.hidden = false;
+          return { li, p };
+        }
+        canvas.title = ''; outline.hidden = true; return null;
+      };
+      canvas.onmousemove = e => { const cell = hit(e); if (cell && !pinned) selectCell(cell.li, cell.p); };
+      canvas.onclick = e => { const cell = hit(e); if (cell) { selectCell(cell.li, cell.p); pinned = true; } };
+      canvas.onmouseleave = () => { outline.hidden = true; canvas.title = ''; };
+    }
+    selectedPos = Math.max(start, Math.min(end - 1, selectedPos)); selectCell(selectedLayer, selectedPos);
+  }
+  $('prev').onclick = () => { $('start').value = start - visibleCount; render(); }; $('next').onclick = () => { $('start').value = end; render(); }; $('unpin').onclick = () => { pinned = false; }; for (const id of ['start', 'group', 'cellWidth']) $(id).oninput = render; for (const id of ['start', 'group']) $(id).onchange = render; $('region').onchange = () => { $('start').value = bounds()[0]; render(); }; $('example').onchange = () => loadExample($('example').value); let resizeFrame = 0, lastWidth = 0; new ResizeObserver(entries => { const w = entries[0].contentRect.width; if (w === lastWidth) return; lastWidth = w; cancelAnimationFrame(resizeFrame); resizeFrame = requestAnimationFrame(render); }).observe($('rank').parentElement);
+  window.addEventListener('resize', () => { cancelAnimationFrame(resizeFrame); resizeFrame = requestAnimationFrame(render); });
+  $('example').value = bundle.initial_example || entries.find(e => e.status === 'complete').key; loadExample($('example').value);
+</script>
+
+</html>
