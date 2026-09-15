@@ -1,0 +1,54 @@
+{
+  "local-llama31-8b": {
+    "provider": "ollama",
+    "model": "llama3.1:8b-instruct-q4_K_M",
+    "base_url": "http://localhost:11434",
+    "note": "Primary local reviewer. Meta family, different from the Qwen target. ~4.9 GB, fits an 8 GB GPU.",
+    "params": {"temperature": 0, "seed": 42, "num_ctx": 8192, "num_predict": 512}
+  },
+  "local-gemma3-4b": {
+    "provider": "ollama",
+    "model": "gemma3:4b",
+    "base_url": "http://localhost:11434",
+    "note": "Second local reviewer. Google family. Use after the primary reviewer; comfortably smaller than a 12B model on an 8 GB laptop.",
+    "params": {"temperature": 0, "seed": 42, "num_ctx": 8192, "num_predict": 512}
+  },
+  "runpod-gemma3-12b": {
+    "provider": "ollama",
+    "model": "gemma3:12b",
+    "base_url": "http://localhost:11434",
+    "note": "RunPod Gemma 3 12B reviewer served by Ollama.",
+    "params": {"temperature": 0, "seed": 42, "num_ctx": 8192, "num_predict": 1024}
+  },
+  "local-qwen3-coder-30b": {
+    "provider": "ollama",
+    "model": "hf.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL",
+    "base_url": "http://localhost:11434",
+    "note": "Same family as the target model. Use only as a third opinion, never as a sole reviewer; report the shared-family caveat.",
+    "params": {"temperature": 0, "seed": 42, "num_ctx": 8192, "num_predict": 512}
+  },
+  "vllm-llama31-8b": {
+    "provider": "openai",
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "base_url": "http://localhost:8000/v1",
+    "structured": "json_schema",
+    "note": "First rented-GPU reviewer. Run the Hugging Face checkpoint with vLLM; use this before paying for a 70B reviewer.",
+    "params": {"temperature": 0, "seed": 42, "max_tokens": 1024}
+  },
+  "vllm-gemma3-12b": {
+    "provider": "openai",
+    "model": "google/gemma-3-12b-it",
+    "base_url": "http://localhost:8000/v1",
+    "structured": "json_schema",
+    "note": "Primary rented-GPU reviewer. Google Gemma 3 12B Instruct, served locally by vLLM in BF16 on a 48 GB GPU.",
+    "params": {"temperature": 0, "seed": 42, "max_tokens": 1024}
+  },
+  "vllm-llama33-70b": {
+    "provider": "openai",
+    "model": "meta-llama/Llama-3.3-70B-Instruct",
+    "base_url": "http://localhost:8000/v1",
+    "structured": "json_schema",
+    "note": "Open-weights second reviewer served by vLLM on a rented GPU. Use bf16 on multiple 80 GB GPUs or an explicitly pinned quantized checkpoint on one large GPU.",
+    "params": {"temperature": 0, "seed": 42, "max_tokens": 1024}
+  }
+}
