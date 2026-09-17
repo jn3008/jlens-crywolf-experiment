@@ -84,7 +84,7 @@ def review_command(args, parser):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=['validate', 'run', 'inspect', 'view', 'review', 'probe', 'analyze'])
+    parser.add_argument("command", choices=['validate', 'run', 'inspect', 'view', 'review', 'probe', 'analyze', 'report'])
     parser.add_argument("--run-dir", help="Saved schema-2 collection directory")
     parser.add_argument("--example", default="0000", help="Example directory number, e.g. 0000")
     parser.add_argument("--position", type=int, help="Absolute token position to inspect; defaults to last prompt token")
@@ -128,6 +128,16 @@ def main():
         print_report(report)
         if args.output:
             print(f"Wrote analysis report: {Path(args.output).resolve()}")
+        return
+    if args.command == "report":
+        if not args.run_dir or not args.output:
+            parser.error("report needs --run-dir and --output")
+        from crywolf.report import write_report
+        try:
+            count = write_report(args.run_dir, args.output)
+        except (ValueError, OSError, json.JSONDecodeError) as exc:
+            parser.exit(1, f"{exc}\n")
+        print(f"Wrote report for {count} examples: {Path(args.output).resolve()}")
         return
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be positive")
