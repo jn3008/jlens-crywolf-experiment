@@ -84,7 +84,7 @@ def review_command(args, parser):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=['validate', 'run', 'inspect', 'view', 'review', 'probe'])
+    parser.add_argument("command", choices=['validate', 'run', 'inspect', 'view', 'review', 'probe', 'analyze'])
     parser.add_argument("--run-dir", help="Saved schema-2 collection directory")
     parser.add_argument("--example", default="0000", help="Example directory number, e.g. 0000")
     parser.add_argument("--position", type=int, help="Absolute token position to inspect; defaults to last prompt token")
@@ -96,6 +96,7 @@ def main():
     parser.add_argument("--output", help="New output path; run defaults to outputs/collection")
     parser.add_argument("--reviewer", help="Reviewer name defined in --reviewers")
     parser.add_argument("--reviewers", default="configs/reviewers.json", help="Reviewer definitions")
+    parser.add_argument("--review-file", help="Usable reviewer JSONL to include in analyze")
     parser.add_argument("--timeout", type=float, default=300, help="Reviewer request timeout in seconds")
     parser.add_argument("--resume", action="store_true", help="Append to an existing review file")
     parser.add_argument("--limit", type=int, help="Collect only the first N prompts")
@@ -115,6 +116,18 @@ def main():
                       f"{target.resolve()} 8000")
         except (ValueError, OSError) as exc:
             parser.exit(1, f"{exc}\n")
+        return
+    if args.command == "analyze":
+        if not args.run_dir:
+            parser.error("--run-dir is required for analyze")
+        from crywolf.analyze import analyze_run, print_report
+        try:
+            report = analyze_run(args.run_dir, review_path=args.review_file, output=args.output)
+        except (ValueError, OSError, json.JSONDecodeError) as exc:
+            parser.exit(1, f"{exc}\n")
+        print_report(report)
+        if args.output:
+            print(f"Wrote analysis report: {Path(args.output).resolve()}")
         return
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be positive")
