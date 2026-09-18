@@ -84,7 +84,9 @@ def review_command(args, parser):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=['validate', 'run', 'inspect', 'view', 'review', 'probe', 'analyze', 'report', 'heatmap'])
+    parser.add_argument("command", choices=["validate", "run", "inspect", "view", "review",
+                                            "analyze", "report", "heatmap", "thresholds",
+                                            "probe"])
     parser.add_argument("--run-dir", help="Saved schema-2 collection directory")
     parser.add_argument("--example", default="0000", help="Example directory number, e.g. 0000")
     parser.add_argument("--position", type=int, help="Absolute token position to inspect; defaults to last prompt token")
@@ -120,6 +122,12 @@ def main():
                         help="Number of layer labels, including first and final; minimum 2")
     parser.add_argument("--font-size", type=float, default=11,
                         help="Base SVG font size in pixels")
+    parser.add_argument("--region", choices=["prompt", "continuation"], default="continuation",
+                        help="Token region for threshold analysis")
+    parser.add_argument("--prompt-group-field", choices=["template_id", "pair_id"], default="template_id",
+                        help="Prompt metadata field used for the eight prompt groups")
+    parser.add_argument("--thresholds", default="1,2,5,10,20,50",
+                        help="Comma-separated intermediate rank thresholds")
     parser.add_argument("--timeout", type=float, default=300, help="Reviewer request timeout in seconds")
     parser.add_argument("--resume", action="store_true", help="Append to an existing review file")
     parser.add_argument("--limit", type=int, help="Collect only the first N prompts")
@@ -192,6 +200,22 @@ def main():
         except (ValueError, OSError, json.JSONDecodeError) as exc:
             parser.exit(1, f"{exc}\n")
         print(f"Wrote {width}×{height}px SVG: {Path(output).resolve()} ({tokens} tokens × {layers} layers; {len(args.group)} group(s))")
+        return
+    if args.command == "thresholds":
+        if not args.run_dir:
+            parser.error("--run-dir is required for thresholds")
+        try:
+            threshold_values = [int(value.strip()) for value in args.thresholds.split(",") if value.strip()]
+            from crywolf.thresholds import threshold_analysis, print_report
+            report = threshold_analysis(args.run_dir, region=args.region,
+                                        thresholds=threshold_values,
+                                        prompt_group_field=args.prompt_group_field,
+                                        output=args.output)
+        except (ValueError, OSError, json.JSONDecodeError) as exc:
+            parser.exit(1, f"{exc}\n")
+        print_report(report)
+        if args.output:
+            print(f"Wrote threshold report: {Path(args.output).resolve()}")
         return
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be positive")
