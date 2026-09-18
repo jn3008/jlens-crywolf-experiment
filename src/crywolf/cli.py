@@ -84,7 +84,7 @@ def review_command(args, parser):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=['validate', 'run', 'inspect', 'view', 'review', 'probe', 'analyze', 'report'])
+    parser.add_argument("command", choices=['validate', 'run', 'inspect', 'view', 'review', 'probe', 'analyze', 'report', 'heatmap'])
     parser.add_argument("--run-dir", help="Saved schema-2 collection directory")
     parser.add_argument("--example", default="0000", help="Example directory number, e.g. 0000")
     parser.add_argument("--position", type=int, help="Absolute token position to inspect; defaults to last prompt token")
@@ -97,6 +97,29 @@ def main():
     parser.add_argument("--reviewer", help="Reviewer name defined in --reviewers")
     parser.add_argument("--reviewers", default="configs/reviewers.json", help="Reviewer definitions")
     parser.add_argument("--review-file", help="Usable reviewer JSONL to include in analyze")
+    parser.add_argument("--group", action="append", help="Concept group for heatmap; repeat to stack groups")
+    parser.add_argument("--metric", choices=["rank", "logit"], default="rank")
+    parser.add_argument("--width", type=int, default=900, help="Maximum SVG width in pixels")
+    parser.add_argument("--cell-height", type=float, default=2, help="Heatmap cell height in pixels")
+    parser.add_argument("--cell-width", type=float, help="Fixed token column width; default fits the requested width")
+    parser.add_argument("--start-color", help="Light endpoint; defaults to the selected group's palette")
+    parser.add_argument("--end-color", help="Dark endpoint; defaults to the selected group's palette")
+    parser.add_argument("--gamma", type=float, default=1.0, help="Colour interpolation curve")
+    parser.add_argument("--show-tokens", action="store_true")
+    parser.add_argument("--mark-concept-tokens", action="store_true",
+                        help="Add a red marker row for vocabulary tokens in the selected concept group")
+    parser.add_argument("--token-angle", type=float, default=45)
+    parser.add_argument("--token-every", type=int, default=10)
+    parser.add_argument("--token-wrap", type=int, default=15,
+                        help="Maximum vertical-offset steps before token labels wrap")
+    parser.add_argument("--token-line-height", type=float, default=14,
+                        help="Vertical spacing between token-label rows")
+    parser.add_argument("--token-style", choices=["strip", "angled"], default="strip",
+                        help="Token-label layout when --show-tokens is enabled")
+    parser.add_argument("--layer-labels", type=int, default=5,
+                        help="Number of layer labels, including first and final; minimum 2")
+    parser.add_argument("--font-size", type=float, default=11,
+                        help="Base SVG font size in pixels")
     parser.add_argument("--timeout", type=float, default=300, help="Reviewer request timeout in seconds")
     parser.add_argument("--resume", action="store_true", help="Append to an existing review file")
     parser.add_argument("--limit", type=int, help="Collect only the first N prompts")
@@ -138,6 +161,37 @@ def main():
         except (ValueError, OSError, json.JSONDecodeError) as exc:
             parser.exit(1, f"{exc}\n")
         print(f"Wrote report for {count} examples: {Path(args.output).resolve()}")
+        return
+    if args.command == "heatmap":
+        if not args.run_dir or not args.group:
+            parser.error("heatmap needs --run-dir and at least one --group")
+        from crywolf.heatmap import write_heatmap
+        try:
+            if len(args.group) > 1 and args.show_tokens:
+                parser.error("--show-tokens is incompatible with multiple --group values")
+            output = args.output
+            if not output:
+                suffix = "_tokens" if args.show_tokens else ""
+                filename = f"example{args.example}_{'_'.join(args.group)}{suffix}.svg"
+                output = str(Path(args.run_dir) / filename)
+            options = dict(metric=args.metric, width=args.width, cell_height=args.cell_height,
+                           cell_width=args.cell_width, start_color=args.start_color,
+                           end_color=args.end_color, gamma=args.gamma,
+                           show_tokens=args.show_tokens, token_angle=args.token_angle,
+                           token_every=args.token_every, token_wrap=args.token_wrap,
+                           token_line_height=args.token_line_height, layer_labels=args.layer_labels,
+                           font_size=args.font_size, token_style=args.token_style,
+                           mark_concept_tokens=args.mark_concept_tokens)
+            if len(args.group) == 1:
+                width, height, tokens, layers = write_heatmap(
+                    args.run_dir, args.example, args.group[0], output, **options)
+            else:
+                from crywolf.heatmap import write_heatmap_stack
+                width, height, tokens, layers = write_heatmap_stack(
+                    args.run_dir, args.example, args.group, output, **options)
+        except (ValueError, OSError, json.JSONDecodeError) as exc:
+            parser.exit(1, f"{exc}\n")
+        print(f"Wrote {width}×{height}px SVG: {Path(output).resolve()} ({tokens} tokens × {layers} layers; {len(args.group)} group(s))")
         return
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be positive")
