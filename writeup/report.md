@@ -158,6 +158,8 @@ The next useful experiment would use more prompts, a larger generation cap, and 
 
 ## Appendix A: Full prompt set
 
+The experiment code, configurations, and prompt datasets are available in the [project repository](https://github.com/jn3008/jlens-crywolf-experiment).
+
 The experiment used eight task groups, each with three matched prompt modes. The full prompt text is reproduced below; generated continuations are available in the collected transcript files.
 
 | Task | Condition | Prompt |
